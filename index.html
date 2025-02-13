@@ -296,9 +296,9 @@ Additions that have connections to the existing roadmap are better when it's pos
     }
     function addNode() {
       clearSelection();
-      // Create node at center of view (in world coordinates)
-      const worldCenter = viewToWorld(canvas.width / 2, canvas.height / 2);
-      const newNode = new Node(worldCenter.x, worldCenter.y);
+      // Create node at the current mouse position in world coordinates.
+      const worldPos = viewToWorld(mouseX, mouseY);
+      const newNode = new Node(worldPos.x, worldPos.y);
       nodes.push(newNode);
       currentSelectedNode = newNode;
       newNode.selected = true;
@@ -1050,6 +1050,96 @@ Additions that have connections to the existing roadmap are better when it's pos
       }
       return JSON.stringify(graph, null, 2);
     }
+
+    // Global object mapping a hotkey (in lowercase) to its corresponding button.
+    let hotkeyMapping = {};
+
+    // Function: assignHotkeysToButtons()
+    // This function collects all <button> elements, and for each button, it assigns a hotkey based on
+    // the first available (unused) letter in its label. It first iterates through the first letter of each button,
+    // then through the second letter for buttons that could not be assigned, and so on.
+    // It then updates the button's innerHTML to display the assigned character as bold and underlined,
+    // and updates the global hotkeyMapping.
+    function assignHotkeysToButtons() {
+      // Get all <button> elements in the document.
+      const buttons = Array.from(document.querySelectorAll('button'));
+      
+      // Prepare an array of objects containing the button and its label.
+      const items = buttons.map(btn => ({
+        button: btn,
+        label: btn.textContent.trim(),
+        assignedPos: -1  // -1 indicates no letter has been assigned yet.
+      })).filter(item => item.label.length > 0);
+
+      const usedKeys = new Set();
+      let pos = 0;
+      let unassigned = items.filter(item => item.assignedPos === -1);
+      
+      // Continue trying with increasing letter positions until no further assignment is possible.
+      while (unassigned.length > 0) {
+        for (const item of unassigned) {
+          if (pos < item.label.length) {
+            const candidate = item.label.charAt(pos);
+            // Only consider alphanumeric characters.
+            if (/^[a-zA-Z0-9]$/.test(candidate)) {
+              const lowerCandidate = candidate.toLowerCase();
+              if (!usedKeys.has(lowerCandidate)) {
+                usedKeys.add(lowerCandidate);
+                item.assignedPos = pos;
+              }
+            }
+          }
+        }
+        pos++;
+        // Check if at least one unassigned button has more letters to try.
+        const nextUnassigned = items.filter(item => item.assignedPos === -1 && pos < item.label.length);
+        if (nextUnassigned.length === 0) break;
+        unassigned = items.filter(item => item.assignedPos === -1);
+      }
+
+      // Clear and update the hotkey mapping.
+      hotkeyMapping = {};
+      for (const item of items) {
+        if (item.assignedPos !== -1) {
+          const idx = item.assignedPos;
+          const label = item.label;
+          const assignedLetter = label.charAt(idx);
+          hotkeyMapping[assignedLetter.toLowerCase()] = item.button;
+          // Update innerHTML to highlight the assigned letter.
+          const before = label.slice(0, idx);
+          const highlighted = '<b><u>' + label.charAt(idx) + '</u></b>';
+          const after = label.slice(idx + 1);
+          item.button.innerHTML = before + highlighted + after;
+        }
+      }
+    }
+
+    // Add a global keydown event listener. When an assigned hotkey is pressed,
+    // it runs the corresponding UI button's onClick function.
+    document.addEventListener("keydown", function(e) {
+      // Avoid interfering when the user is typing in an input or textarea.
+      const tagName = e.target.tagName.toLowerCase();
+      if (tagName === "input" || tagName === "textarea") return;
+      
+      const key = e.key.toLowerCase();
+      if (hotkeyMapping.hasOwnProperty(key)) {
+        // Prevent the pressed key from being added into any newly focused element.
+        e.preventDefault();
+        hotkeyMapping[key].click();
+      }
+    });
+
+    // Once the DOM is loaded, assign hotkeys and watch for changes in the UI overlay.
+    document.addEventListener("DOMContentLoaded", function() {
+      assignHotkeysToButtons();
+
+      // Automatically update hotkeys when the UI overlay is updated.
+      const uiOverlay = document.getElementById("action-overlay");
+      if (uiOverlay) {
+        const observer = new MutationObserver(assignHotkeysToButtons);
+        observer.observe(uiOverlay, { childList: true, subtree: true });
+      }
+    });
   </script>
 </body>
 </html>
