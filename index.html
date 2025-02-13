@@ -14,16 +14,19 @@
       display: block;
       background: #f0f0f0;
     }
-    /* Instructions now move with the world (pannable) so they aren't sticky */
+    /* Sticky instructions at top left */
     #instructions {
-      position: absolute;
+      position: fixed;
       top: 10px;
       left: 10px;
-      background: rgba(255,255,255,0.8);
+      background: rgba(255, 255, 255, 0.9);
       padding: 10px;
       border-radius: 5px;
       font-family: sans-serif;
       z-index: 10;
+      max-width: 300px;
+      max-height: 400px;
+      overflow-y: auto;
     }
     /* API settings and action overlay remain fixed */
     #api-settings, #action-overlay {
@@ -56,37 +59,40 @@
   </style>
 </head>
 <body>
+  <!-- Sticky Instructions on top left -->
+  <div id="instructions">
+    <button id="instructions-close-btn" style="float: right; font-size: 16px; line-height: 1; cursor: pointer;">×</button>
+    <p><strong>Instructions:</strong></p>
+    <ul>
+      <li>Click on a node to select it (orange outline appears).</li>
+      <li>Drag a node to move it. Connected nodes will tug each other.</li>
+      <li>Hold <code>Shift</code> and drag from one node to another to create an edge.</li>
+      <li>Hold <code>Ctrl</code>/<code>Cmd</code> while dragging to reposition a node directly.</li>
+      <li>Double-click a node or press <code>e</code> to edit its text inline.</li>
+      <li>Press <code>d</code> to delete the selected node (and its edges).</li>
+      <li>Use the <strong>Add Node</strong> button to create a new node at the view's center.</li>
+      <li>Use the <strong>Delete Node</strong> button to remove the selected node.</li>
+      <li>Use the <strong>Edit Node</strong> button to edit a node's text.</li>
+      <li>Use the <strong>Connect Node</strong> button to start connecting nodes; use <strong>Cancel Connect</strong> to abort.</li>
+      <li>Use the <strong>Export Mermaid</strong> button to download your graph as Mermaid code.</li>
+      <li>Use the <strong>Generate Roadmap</strong> button to create a new roadmap (requires OpenAI API Key).</li>
+      <li>Use the <strong>Clear Graph</strong> button to delete every node and connection (confirmation required).</li>
+      <li>Scroll on the canvas to pan.</li>
+      <li>Hold <code>Ctrl</code> and scroll to zoom in and out.</li>
+    </ul>
+  </div>
+
+  <!-- Show Instructions Button (appears when instructions are closed) -->
+  <button id="show-instructions-btn" style="position: fixed; top: 10px; left: 10px; z-index: 10; background: rgba(255, 255, 255, 0.9); border: none; border-radius: 5px; padding: 5px; font-family: sans-serif; display: none;">Show Instructions</button>
+
   <!-- API Key Settings -->
   <div id="api-settings">
     <label for="openai-api-key">OpenAI API Key:</label>
     <input type="password" id="openai-api-key" placeholder="Enter API Key">
   </div>
   
-  <!-- UI Overlay for actions and instructions -->
+  <!-- UI Overlay for actions -->
   <div id="action-overlay">
-    <div id="instructions-panel" style="margin-bottom: 10px; background: rgba(255,255,255,0.9); padding: 10px; border-radius: 5px; max-height: 300px; overflow-y: auto;">
-      <button id="close-instructions-btn" style="float: right; font-size: 16px; line-height: 1;">×</button>
-      <p><strong>Instructions:</strong></p>
-      <ul>
-        <li>Click on a node to select it (orange outline appears).</li>
-        <li>Drag a node to move it. Connected nodes will tug each other.</li>
-        <li>Hold <code>Shift</code> and drag from one node to another to create an edge.</li>
-        <li>Hold <code>Ctrl</code>/<code>Cmd</code> while dragging to reposition a node directly.</li>
-        <li>Double-click a node or press <code>e</code> to edit its text inline.</li>
-        <li>Press <code>d</code> to delete the selected node (and its edges).</li>
-        <li>Use the <strong>Add Node</strong> button to create a new node at the view's center.</li>
-        <li>Use the <strong>Delete Node</strong> button to remove the selected node.</li>
-        <li>Use the <strong>Edit Node</strong> button to edit a node's text.</li>
-        <li>Use the <strong>Connect Node</strong> button to start connecting nodes; use <strong>Cancel Connect</strong> to abort.</li>
-        <li>Use the <strong>Export Mermaid</strong> button to download your graph as Mermaid code.</li>
-        <li>Use the <strong>Generate Roadmap</strong> button to create a new roadmap (requires OpenAI API Key).</li>
-        <li>Use the <strong>Clear Graph</strong> button to delete every node and connection (confirmation required).</li>
-        <li>Node text supports word wrapping and resizing.</li>
-        <li>Enter your OpenAI API Key in the field below.</li>
-        <li>Scroll (wheel) on the canvas to pan the grid.</li>
-        <li>Hold <code>Ctrl</code> and scroll (wheel) to zoom in and out.</li>
-      </ul>
-    </div>
     <button id="add-node-btn">Add Node</button>
     <button id="delete-node-btn">Delete Node</button>
     <button id="edit-node-btn">Edit Node</button>
@@ -132,6 +138,36 @@
     let panOffsetX = 0;
     let panOffsetY = 0;
     let scale = 1;
+
+
+    const generatePromptMessage = (currentMermaid, userGoal) => `
+I have the following current roadmap in mermaid format:
+${currentMermaid}
+My goal is: "${userGoal}"
+
+Generate action plans for the roadmap to achieve the goal.
+Each node should be completeable tasks that lead to the goal.
+
+For example, if the goal is "I want to build a simple LLM application", the roadmap might be:
+
+graph LR
+    node0["Learn ChatGPT API"]
+    node1["Learn prompt engineering"]
+    node2["Send a request to the ChatGPT API"]
+    node3["Simple CLI with Node.js"]
+    node4["Learn RAG"]
+    node5["Build a simple RAG application"]
+    node6["Simple web app with Next.js"]
+    node0 --> node1
+    node0 --> node2
+    node2 --> node3
+    node3 --> node4
+    node4 --> node5
+    node4 --> node6
+
+Generate around 5 nodes, more branching nodes are better.
+Return only the mermaid graph code (starting with "graph LR").
+      `.trim();
 
     /* Color definitions */
     const COLOR_SCHEME = {
@@ -291,7 +327,6 @@
       const centerWorld = viewToWorld(canvas.width / 2, canvas.height / 2);
 
       lines.forEach(rawLine => {
-        console.log(rawLine);
         const line = rawLine.trim();
         if (line === "") return;
         
@@ -311,8 +346,8 @@
           // Place the node around the current view center with a random offset.
           const id = match[1];
           const text = match[2];
-          const offsetX = (Math.random() - 0.5) * 300; // between -150 and 150
-          const offsetY = (Math.random() - 0.5) * 200; // between -100 and 100
+          const offsetX = (Math.random() - 0.5) * 300 + 200; // between -150 and 150
+          const offsetY = (Math.random() - 0.5) * 200 + 100; // between -100 and 100
           const x = centerWorld.x + offsetX;
           const y = centerWorld.y + offsetY;
           const newNode = new Node(x, y);
@@ -677,8 +712,6 @@
     function animate() {
       update();
       draw();
-      // Update instructions translation so they pan with the scene (instructions do not scale)
-      document.getElementById("instructions-panel").style.transform = `translate(${panOffsetX}px, ${panOffsetY}px)`;
       requestAnimationFrame(animate);
     }
     animate();
@@ -745,13 +778,7 @@
       const userGoal = prompt("Enter your goal for the roadmap:");
       if (!userGoal) return;
       const currentMermaid = getExportableMermaidGraph();
-      const promptMessage = `
-I have the following current roadmap in mermaid format:
-${currentMermaid}
-My goal is: "${userGoal}"
-
-Generate action plans for the roadmap. Return only the mermaid graph code starting with "graph LR".
-      `.trim();
+      const promptMessage = generatePromptMessage(currentMermaid, userGoal);
       const responseData = await queryOpenAI(promptMessage);
       if (!responseData || !responseData.choices || responseData.choices.length === 0) {
         alert("Failed to get response from OpenAI.");
@@ -794,47 +821,64 @@ Generate action plans for the roadmap. Return only the mermaid graph code starti
       }
     }
     function updateMermaidGraph(mermaidText) {
+      // Remove any markdown mermaid codeblocks
       mermaidText = mermaidText.replace(/```mermaid/g, "").replace(/```/g, "");
-      const lines = mermaidText.split('\n');
+      // Split and trim lines, filtering out empty ones
+      const lines = mermaidText.split('\n').map(line => line.trim()).filter(line => line !== '');
+      
+      // Remove the graph header if present (e.g. "graph LR")
       if (lines[0].startsWith("graph")) {
         lines.shift();
       }
+      
       const newNodesMap = {};
-      const nodeRegex = /^(node\w+)\s*\[\s*"([^"]+)"\s*\]$/;
-      const edgeRegex = /^(node\w+)\s*-->\s*(node\w+)\s*$/;
-
+      
+      // Updated regex definitions:
+      // Matches a standalone node: e.g., A[Some Label]
+      const nodeRegex = /^(\w+)\s*\[\s*(.+?)\s*\]$/;
+      // Matches node connections: e.g., A --> B
+      const edgeRegex = /^(\w+)\s*-->\s*(\w+)$/;
+      
       // Compute the center of the view in world coordinates.
       const centerWorld = viewToWorld(canvas.width / 2, canvas.height / 2);
-
+      
+      // First pass: Create all nodes
       lines.forEach(line => {
-        line = line.trim();
-        if (!line) return;
         let match = line.match(nodeRegex);
         if (match) {
           const nodeId = match[1];
-          const nodeText = match[2];
-          // Use symmetric random offsets so that nodes are scattered around the center.
-          const offsetX = (Math.random() - 0.5) * 300; // random between -150 and 150
-          const offsetY = (Math.random() - 0.5) * 200; // random between -100 and 100
-          const newX = centerWorld.x + offsetX;
-          const newY = centerWorld.y + offsetY;
-          const newNode = new Node(newX, newY);
-          newNode.text = nodeText;
-          nodes.push(newNode);
-          newNodesMap[nodeId] = newNode;
-        } else {
-          match = line.match(edgeRegex);
-          if (match) {
-            const sourceId = match[1];
-            const targetId = match[2];
+          let nodeText = match[2];
+          // If nodeText has quotes, remove them.
+          nodeText = nodeText.replace(/['"]/g, "");
+
+          if (!newNodesMap[nodeId]) {
+            const offsetX = (Math.random() - 0.5) * 300;
+            const offsetY = (Math.random() - 0.5) * 200;
+            const newX = centerWorld.x + offsetX;
+            const newY = centerWorld.y + offsetY;
+            const newNode = new Node(newX, newY);
+            newNode.text = nodeText;
+            nodes.push(newNode);
+            newNodesMap[nodeId] = newNode;
+          }
+        }
+      });
+
+      // Second pass: Create all edges
+      lines.forEach(line => {
+        let match = line.match(edgeRegex);
+        if (match) {
+          const sourceId = match[1];
+          const targetId = match[2];
+          
+          // Only create edge if both nodes exist
+          if (newNodesMap[sourceId] && newNodesMap[targetId]) {
             const sourceNode = newNodesMap[sourceId];
             const targetNode = newNodesMap[targetId];
-            if (sourceNode && targetNode) {
-              const dx = targetNode.x - sourceNode.x;
-              const dy = targetNode.y - sourceNode.y;
-              const length = Math.sqrt(dx * dx + dy * dy);
-              edges.push(new Edge(sourceNode, targetNode, length));
-            }
+            const dx = targetNode.x - sourceNode.x;
+            const dy = targetNode.y - sourceNode.y;
+            const length = Math.sqrt(dx * dx + dy * dy);
+            edges.push(new Edge(sourceNode, targetNode, length));
           }
         }
       });
@@ -882,9 +926,52 @@ Generate action plans for the roadmap. Return only the mermaid graph code starti
       saveMermaidData();
     }, 1000);
 
-    // Close instructions panel
-    document.getElementById("close-instructions-btn").addEventListener("click", () => {
-      document.getElementById("instructions-panel").style.display = "none";
+    // Set up the instructions close button and load its closed state from localStorage
+    document.addEventListener("DOMContentLoaded", function() {
+      const instructionsElem = document.getElementById("instructions");
+      const closeBtn = document.getElementById("instructions-close-btn");
+      const showBtn = document.getElementById("show-instructions-btn");
+
+      // Check localStorage for previous "closed" state:
+      if (localStorage.getItem("instructionsClosed") === "true") {
+        if (instructionsElem) {
+          instructionsElem.style.display = "none";
+        }
+        if (showBtn) {
+          showBtn.style.display = "block";
+        }
+      } else {
+        if (instructionsElem) {
+          instructionsElem.style.display = "block";
+        }
+        if (showBtn) {
+          showBtn.style.display = "none";
+        }
+      }
+
+      // Attach close event for the instructions panel.
+      if (closeBtn) {
+        closeBtn.addEventListener("click", () => {
+          if (instructionsElem) {
+            instructionsElem.style.display = "none";
+          }
+          if (showBtn) {
+            showBtn.style.display = "block";
+          }
+          localStorage.setItem("instructionsClosed", "true");
+        });
+      }
+
+      // Attach event for the show instructions button.
+      if (showBtn) {
+        showBtn.addEventListener("click", () => {
+          if (instructionsElem) {
+            instructionsElem.style.display = "block";
+          }
+          showBtn.style.display = "none";
+          localStorage.setItem("instructionsClosed", "false");
+        });
+      }
     });
   </script>
 </body>
