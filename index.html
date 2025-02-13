@@ -140,34 +140,41 @@
     let scale = 1;
 
 
-    const generatePromptMessage = (currentMermaid, userGoal) => `
-I have the following current roadmap in mermaid format:
-${currentMermaid}
+    function generatePromptMessage(currentJSON, userGoal) {
+      return `
+I have the current roadmap in JSON format:
+${currentJSON}
+
 My goal is: "${userGoal}"
 
-Generate action plans for the roadmap to achieve the goal.
-Each node should be completeable tasks that lead to the goal.
+Please generate additional action items to extend my roadmap.
+Return only the JSON object with the new additions, without explaining anything.
+The JSON format should be:
+{
+  "nodes": [
+    { "id": "nodeX", "text": "Description of the task" }
+    // More nodes if applicable
+  ],
+  "edges": [
+    { "from": "nodeA", "to": "nodeB" }
+    // More edges if applicable
+  ]
+}
 
-For example, if the goal is "I want to build a simple LLM application", the roadmap might be:
-
-graph LR
-    node0["Learn ChatGPT API"]
-    node1["Learn prompt engineering"]
-    node2["Send a request to the ChatGPT API"]
-    node3["Simple CLI with Node.js"]
-    node4["Learn RAG"]
-    node5["Build a simple RAG application"]
-    node6["Simple web app with Next.js"]
-    node0 --> node1
-    node0 --> node2
-    node2 --> node3
-    node3 --> node4
-    node4 --> node5
-    node4 --> node6
-
-Generate around 5 nodes, more branching nodes are better.
-Return only the mermaid graph code (starting with "graph LR").
-      `.trim();
+For example, if my goal is "I want to build a simple LLM application", your response might be:
+{
+  "nodes": [
+    { "id": "node3", "text": "Learn ChatGPT API" },
+    { "id": "node4", "text": "Learn prompt engineering" },
+    { "id": "node5", "text": "Build a simple CLI with Node.js" }
+  ],
+  "edges": [
+    { "from": "node3", "to": "node4" },
+    { "from": "node4", "to": "node5" }
+  ]
+}
+`.trim();
+    }
 
     /* Color definitions */
     const COLOR_SCHEME = {
@@ -346,8 +353,8 @@ Return only the mermaid graph code (starting with "graph LR").
           // Place the node around the current view center with a random offset.
           const id = match[1];
           const text = match[2];
-          const offsetX = (Math.random() - 0.5) * 300 + 200; // between -150 and 150
-          const offsetY = (Math.random() - 0.5) * 200 + 100; // between -100 and 100
+          const offsetX = (Math.random() - 0.5) * 500 + 250;
+          const offsetY = (Math.random() - 0.5) * 500;
           const x = centerWorld.x + offsetX;
           const y = centerWorld.y + offsetY;
           const newNode = new Node(x, y);
@@ -777,18 +784,16 @@ Return only the mermaid graph code (starting with "graph LR").
     async function generateRoadmap() {
       const userGoal = prompt("Enter your goal for the roadmap:");
       if (!userGoal) return;
-      const currentMermaid = getExportableMermaidGraph();
-      const promptMessage = generatePromptMessage(currentMermaid, userGoal);
+      const currentJSON = getExportableJSONGraph();
+      const promptMessage = generatePromptMessage(currentJSON, userGoal);
       const responseData = await queryOpenAI(promptMessage);
       if (!responseData || !responseData.choices || responseData.choices.length === 0) {
         alert("Failed to get response from OpenAI.");
         return;
       }
       const reply = responseData.choices[0].message.content;
-      console.log("Received mermaid diagram from OpenAI:", reply);
-      nodes.length = 0;
-      edges.length = 0;
-      updateMermaidGraph(reply);
+      console.log("Received JSON update from OpenAI:", reply);
+      updateGraphFromJSON(reply);
     }
     async function queryOpenAI(message) {
       const apiKey = document.getElementById("openai-api-key").value;
@@ -800,8 +805,6 @@ Return only the mermaid graph code (starting with "graph LR").
       const payload = {
         model: "gpt-4o",
         messages: [{ role: "user", content: message }],
-        max_tokens: 150,
-        temperature: 0.7
       };
       try {
         const response = await fetch(url, {
@@ -820,68 +823,64 @@ Return only the mermaid graph code (starting with "graph LR").
         console.error("Error querying OpenAI:", error);
       }
     }
-    function updateMermaidGraph(mermaidText) {
-      // Remove any markdown mermaid codeblocks
-      mermaidText = mermaidText.replace(/```mermaid/g, "").replace(/```/g, "");
-      // Split and trim lines, filtering out empty ones
-      const lines = mermaidText.split('\n').map(line => line.trim()).filter(line => line !== '');
-      
-      // Remove the graph header if present (e.g. "graph LR")
-      if (lines[0].startsWith("graph")) {
-        lines.shift();
+    function updateGraphFromJSON(jsonText) {
+      // Remove the "```json" and "```" from the JSON text.
+      jsonText = jsonText.replace(/```json\s*/, "").replace(/\s*```/, "");
+
+      let data;
+      try {
+        data = JSON.parse(jsonText);
+      } catch (error) {
+        alert("Failed to parse JSON from OpenAI response.");
+        console.error("JSON parse error:", error);
+        return;
       }
-      
-      const newNodesMap = {};
-      
-      // Updated regex definitions:
-      // Matches a standalone node: e.g., A[Some Label]
-      const nodeRegex = /^(\w+)\s*\[\s*(.+?)\s*\]$/;
-      // Matches node connections: e.g., A --> B
-      const edgeRegex = /^(\w+)\s*-->\s*(\w+)$/;
-      
-      // Compute the center of the view in world coordinates.
+
+      // Expect data to have "nodes" and "edges" arrays.
       const centerWorld = viewToWorld(canvas.width / 2, canvas.height / 2);
-      
-      // First pass: Create all nodes
-      lines.forEach(line => {
-        let match = line.match(nodeRegex);
-        if (match) {
-          const nodeId = match[1];
-          let nodeText = match[2];
-          // If nodeText has quotes, remove them.
-          nodeText = nodeText.replace(/['"]/g, "");
 
-          if (!newNodesMap[nodeId]) {
-            const offsetX = (Math.random() - 0.5) * 300;
-            const offsetY = (Math.random() - 0.5) * 200;
-            const newX = centerWorld.x + offsetX;
-            const newY = centerWorld.y + offsetY;
-            const newNode = new Node(newX, newY);
-            newNode.text = nodeText;
+      // Process new nodes.
+      if (data.nodes && Array.isArray(data.nodes)) {
+        data.nodes.forEach(newNodeData => {
+          // Check if a node with this id already exists.
+          const exists = nodes.find(n => n.graphId === newNodeData.id);
+          if (!exists) {
+            // Create new Node with a random offset near the center.
+            const offsetX = (Math.random() - 0.5) * 500 + 250;
+            const offsetY = (Math.random() - 0.5) * 500;
+            const newNode = new Node(centerWorld.x + offsetX, centerWorld.y + offsetY);
+            newNode.text = newNodeData.text;
+            newNode.graphId = newNodeData.id; // assign graph id for future reference.
             nodes.push(newNode);
-            newNodesMap[nodeId] = newNode;
           }
+        });
+      }
+
+      // Build a mapping from graphId to node for edge processing.
+      const idToNode = {};
+      nodes.forEach(n => {
+        if (n.graphId) {
+          idToNode[n.graphId] = n;
         }
       });
 
-      // Second pass: Create all edges
-      lines.forEach(line => {
-        let match = line.match(edgeRegex);
-        if (match) {
-          const sourceId = match[1];
-          const targetId = match[2];
-          
-          // Only create edge if both nodes exist
-          if (newNodesMap[sourceId] && newNodesMap[targetId]) {
-            const sourceNode = newNodesMap[sourceId];
-            const targetNode = newNodesMap[targetId];
-            const dx = targetNode.x - sourceNode.x;
-            const dy = targetNode.y - sourceNode.y;
-            const length = Math.sqrt(dx * dx + dy * dy);
-            edges.push(new Edge(sourceNode, targetNode, length));
+      // Process new edges.
+      if (data.edges && Array.isArray(data.edges)) {
+        data.edges.forEach(edgeData => {
+          const sourceNode = idToNode[edgeData.from];
+          const targetNode = idToNode[edgeData.to];
+          if (sourceNode && targetNode) {
+            // Only add the edge if it doesn't already exist.
+            const duplicate = edges.find(e => e.nodeA === sourceNode && e.nodeB === targetNode);
+            if (!duplicate) {
+              const dx = targetNode.x - sourceNode.x;
+              const dy = targetNode.y - sourceNode.y;
+              const length = Math.sqrt(dx * dx + dy * dy);
+              edges.push(new Edge(sourceNode, targetNode, length));
+            }
           }
-        }
-      });
+        });
+      }
     }
 
     // --- Zoom controls ---
@@ -973,6 +972,26 @@ Return only the mermaid graph code (starting with "graph LR").
         });
       }
     });
+
+    function getExportableJSONGraph() {
+      let nodeToId = new Map();
+      const graph = { nodes: [], edges: [] };
+      for (let i = 0; i < nodes.length; i++) {
+        const node = nodes[i];
+        // Use existing graphId if it exists, otherwise use "node" + index.
+        const id = node.graphId ? node.graphId : "node" + i;
+        nodeToId.set(node, id);
+        graph.nodes.push({ id: id, text: node.text, x: node.x, y: node.y });
+      }
+      for (const edge of edges) {
+        const idA = nodeToId.get(edge.nodeA);
+        const idB = nodeToId.get(edge.nodeB);
+        if (idA !== undefined && idB !== undefined) {
+          graph.edges.push({ from: idA, to: idB });
+        }
+      }
+      return JSON.stringify(graph, null, 2);
+    }
   </script>
 </body>
 </html>
