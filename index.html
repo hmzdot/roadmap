@@ -14,12 +14,40 @@
       display: block;
       background: #f0f0f0;
     }
-    /* A small instructions overlay */
+    /* Instructions now move with the world (pannable) so they aren't sticky */
     #instructions {
       position: absolute;
       top: 10px;
       left: 10px;
-      background: rgba(255, 255, 255, 0.8);
+      background: rgba(255,255,255,0.8);
+      padding: 10px;
+      border-radius: 5px;
+      font-family: sans-serif;
+      z-index: 10;
+    }
+    /* API settings and action overlay remain fixed */
+    #api-settings, #action-overlay {
+      position: absolute;
+      background: rgba(255,255,255,0.9);
+      padding: 10px;
+      border-radius: 5px;
+      font-family: sans-serif;
+      z-index: 10;
+    }
+    #api-settings {
+      bottom: 10px;
+      left: 10px;
+    }
+    #action-overlay {
+      top: 10px;
+      right: 10px;
+    }
+    /* Zoom controls positioned fixed in bottom right */
+    #zoom-controls {
+      position: fixed;
+      bottom: 10px;
+      right: 10px;
+      background: rgba(255,255,255,0.9);
       padding: 10px;
       border-radius: 5px;
       font-family: sans-serif;
@@ -28,36 +56,37 @@
   </style>
 </head>
 <body>
-  <div id="instructions">
-    <p><strong>Instructions:</strong></p>
-    <ul>
-      <li>Click on a node to select it (an orange outline appears).</li>
-      <li>Drag a node to move it. Connected nodes will tug each other.</li>
-      <li>Hold <code>Shift</code> and drag from one node to another to create an edge.</li>
-      <li>Hold <code>Ctrl</code> (or <code>Cmd</code> on Mac) while dragging to directly reposition a node (without tugging connected nodes).</li>
-      <li>Double-click a node or press <code>e</code> to edit the selected node's text inline.</li>
-      <li>Press <code>d</code> to delete the selected node (and its connected edges).</li>
-      <li>Click the <strong>Add Node</strong> button to create a new node at the canvas center.</li>
-      <li>Click the <strong>Delete Node</strong> button to remove the selected node.</li>
-      <li>Click the <strong>Edit Node</strong> button to edit the selected node's text.</li>
-      <li>Use the <strong>Connect Node</strong> button to start connecting nodes, and the <strong>Cancel Connect</strong> button to abort.</li>
-      <li>Click the <strong>Export Mermaid</strong> button to download your graph as Mermaid code.</li>
-      <li>Click the <strong>Generate Roadmap</strong> button to create a new roadmap via the OpenAI API (API Key required).</li>
-      <li>Click the <strong>Clear Graph</strong> button to delete every node and connection (confirmation required).</li>
-      <li>Your graph is automatically saved in Mermaid format to local storage.</li>
-      <li>Node text supports dynamic word wrapping and resizing to fit within each node.</li>
-      <li>Enter your OpenAI API Key in the field at the bottom left to enable roadmap generation.</li>
-    </ul>
-  </div>
-  
   <!-- API Key Settings -->
-  <div id="api-settings" style="position: absolute; bottom: 10px; left: 10px; background: rgba(255,255,255,0.8); padding: 10px; border-radius: 5px; font-family: sans-serif; z-index: 10;">
+  <div id="api-settings">
     <label for="openai-api-key">OpenAI API Key:</label>
     <input type="password" id="openai-api-key" placeholder="Enter API Key">
   </div>
   
-  <!-- UI Overlay for actions: add, delete, edit, connect, export, generate roadmap, clear graph -->
-  <div id="action-overlay" style="position: absolute; top: 10px; right: 10px; background: rgba(255,255,255,0.9); padding: 10px; border-radius: 5px; font-family: sans-serif; z-index: 10;">
+  <!-- UI Overlay for actions and instructions -->
+  <div id="action-overlay">
+    <div id="instructions-panel" style="margin-bottom: 10px; background: rgba(255,255,255,0.9); padding: 10px; border-radius: 5px; max-height: 300px; overflow-y: auto;">
+      <button id="close-instructions-btn" style="float: right; font-size: 16px; line-height: 1;">×</button>
+      <p><strong>Instructions:</strong></p>
+      <ul>
+        <li>Click on a node to select it (orange outline appears).</li>
+        <li>Drag a node to move it. Connected nodes will tug each other.</li>
+        <li>Hold <code>Shift</code> and drag from one node to another to create an edge.</li>
+        <li>Hold <code>Ctrl</code>/<code>Cmd</code> while dragging to reposition a node directly.</li>
+        <li>Double-click a node or press <code>e</code> to edit its text inline.</li>
+        <li>Press <code>d</code> to delete the selected node (and its edges).</li>
+        <li>Use the <strong>Add Node</strong> button to create a new node at the view's center.</li>
+        <li>Use the <strong>Delete Node</strong> button to remove the selected node.</li>
+        <li>Use the <strong>Edit Node</strong> button to edit a node's text.</li>
+        <li>Use the <strong>Connect Node</strong> button to start connecting nodes; use <strong>Cancel Connect</strong> to abort.</li>
+        <li>Use the <strong>Export Mermaid</strong> button to download your graph as Mermaid code.</li>
+        <li>Use the <strong>Generate Roadmap</strong> button to create a new roadmap (requires OpenAI API Key).</li>
+        <li>Use the <strong>Clear Graph</strong> button to delete every node and connection (confirmation required).</li>
+        <li>Node text supports word wrapping and resizing.</li>
+        <li>Enter your OpenAI API Key in the field below.</li>
+        <li>Scroll (wheel) on the canvas to pan the grid.</li>
+        <li>Hold <code>Ctrl</code> and scroll (wheel) to zoom in and out.</li>
+      </ul>
+    </div>
     <button id="add-node-btn">Add Node</button>
     <button id="delete-node-btn">Delete Node</button>
     <button id="edit-node-btn">Edit Node</button>
@@ -68,9 +97,17 @@
     <button id="clear-graph-btn">Clear Graph</button>
   </div>
   
+  <!-- Zoom Controls (fixed in bottom right) -->
+  <div id="zoom-controls">
+    <button id="zoom-in-btn">Zoom In</button>
+    <button id="zoom-out-btn">Zoom Out</button>
+    <button id="zoom-reset-btn">Reset</button>
+    <span id="zoom-label">100%</span>
+  </div>
+  
   <canvas id="canvas"></canvas>
   <script>
-    // Get the canvas and set its size
+    /* Set up canvas */
     const canvas = document.getElementById("canvas");
     const ctx = canvas.getContext("2d");
     canvas.width = window.innerWidth;
@@ -80,56 +117,52 @@
       canvas.height = window.innerHeight;
     });
 
-    // Global arrays to hold our nodes and edges
+    /* Global arrays and variables */
     const nodes = [];
     const edges = [];
-
-    // Global variables for interactions:
-    let draggedNode = null;           // Node being dragged
-    let currentSelectedNode = null;   // Currently selected node
+    let draggedNode = null;
+    let currentSelectedNode = null;
     let dragOffsetX = 0;
     let dragOffsetY = 0;
-    let isCreatingEdge = false;       // True when holding shift while clicking a node
-    let edgeStart = null;             // Starting node for an edge drag
+    let isCreatingEdge = false;
+    let edgeStart = null;
     let mouseX = 0;
     let mouseY = 0;
+    // Global pan offsets (in screen coordinates) and zoom scale
+    let panOffsetX = 0;
+    let panOffsetY = 0;
+    let scale = 1;
 
-    // Add this after the global variables and before the Node class
+    /* Color definitions */
     const COLOR_SCHEME = {
-      GRID: '#bbb',                 // Subtle gray for grid dots
-      EDGE: '#64748b',                 // Slate gray for connections
+      GRID: '#fff',
+      EDGE: '#64748b',
       NODE: {
-        FILL: '#0ea5e9',              // Vibrant blue for nodes
-        BORDER: '#0284c7',            // Slightly darker blue for borders
-        TEXT: '#ffffff',              // White text for contrast
-        SELECTED: '#f97316'           // Orange for selection
+        FILL: '#0ea5e9',
+        BORDER: '#0284c7',
+        TEXT: '#ffffff',
+        SELECTED: '#f97316'
       },
-      PREVIEW: '#dc2626'              // Red for edge preview
+      PREVIEW: '#dc2626'
     };
 
-    // Global variable to track an active inline editor.
     let inlineEditor = null;
-
-    // Global flag for UI Connect Mode
     let uiConnectMode = false;
 
-    // The Node class: each node holds its current and previous positions (for Verlet integration),
-    // a radius (set to 50), a flag for dragging and a text property.
+    /* Node and Edge classes */
     class Node {
       constructor(x, y) {
-        this.x = x;
-        this.y = y;
+        this.x = x;         // world coordinate
+        this.y = y;         // world coordinate
         this.oldx = x;
         this.oldy = y;
-        this.radius = 50;       // Increased radius
+        this.radius = 50;
         this.isDragging = false;
-        this.directDragging = false; // <-- New flag: true when repositioned by Cmd/Ctrl drag.
-        this.text = "";         // Text content for the node
-        this.selected = false;  // Indicates if the node is selected
+        this.directDragging = false;
+        this.text = "";
+        this.selected = false;
       }
     }
-
-    // The Edge class: connects two nodes and remembers its rest length.
     class Edge {
       constructor(nodeA, nodeB, length) {
         this.nodeA = nodeA;
@@ -138,7 +171,7 @@
       }
     }
 
-    // Helper: get mouse coordinates relative to the canvas
+    /* Helper functions */
     function getMousePos(e) {
       const rect = canvas.getBoundingClientRect();
       return {
@@ -146,77 +179,65 @@
         y: e.clientY - rect.top
       };
     }
-
-    // Helper: returns a node if the (x,y) position is within its radius.
+    // Converts view (screen) coordinates to world coordinates (taking pan and zoom into account)
+    function viewToWorld(x, y) {
+      return { x: (x - panOffsetX) / scale, y: (y - panOffsetY) / scale };
+    }
+    // Returns a node if the given screen (view) coordinate hits it
     function getNodeAtPosition(x, y) {
-      // Check backwards so that later nodes, drawn on top, get priority.
+      const worldPos = viewToWorld(x, y);
       for (let i = nodes.length - 1; i >= 0; i--) {
         const node = nodes[i];
-        const dx = node.x - x;
-        const dy = node.y - y;
+        const dx = node.x - worldPos.x;
+        const dy = node.y - worldPos.y;
         if (Math.sqrt(dx * dx + dy * dy) < node.radius) {
           return node;
         }
       }
       return null;
     }
-
-    // Function to clear selection from all nodes.
     function clearSelection() {
       if (currentSelectedNode) {
         currentSelectedNode.selected = false;
         currentSelectedNode = null;
       }
     }
-
-    // Function to add a new node at the center of the canvas.
     function addNode() {
       clearSelection();
-      const newNode = new Node(canvas.width / 2, canvas.height / 2);
+      // Create node at center of view (in world coordinates)
+      const worldCenter = viewToWorld(canvas.width / 2, canvas.height / 2);
+      const newNode = new Node(worldCenter.x, worldCenter.y);
       nodes.push(newNode);
       currentSelectedNode = newNode;
       newNode.selected = true;
     }
-
-    // Function to delete the currently selected node.
     function deleteNode() {
       if (currentSelectedNode) {
-        // Remove edges associated with the selected node.
         for (let i = edges.length - 1; i >= 0; i--) {
           if (edges[i].nodeA === currentSelectedNode || edges[i].nodeB === currentSelectedNode) {
             edges.splice(i, 1);
           }
         }
-        // Remove the node.
         const index = nodes.indexOf(currentSelectedNode);
-        if (index > -1) {
-          nodes.splice(index, 1);
-        }
+        if (index > -1) nodes.splice(index, 1);
         currentSelectedNode = null;
       }
     }
-
-    // Function to trigger inline editing for the selected node.
     function editNode() {
       if (currentSelectedNode) {
         editNodeInline(currentSelectedNode);
       }
     }
-
-    // Function to start connect mode via the UI. The selected node becomes the starting node.
     function startConnectMode() {
       if (currentSelectedNode) {
         edgeStart = currentSelectedNode;
         uiConnectMode = true;
-        // Update the overlay: show a Cancel button and hide the Connect button.
         document.getElementById("cancel-connect-btn").style.display = "inline-block";
         document.getElementById("connect-node-btn").style.display = "none";
       } else {
         alert("Please select a node first to start connecting.");
       }
     }
-
-    // Function to cancel UI Connect Mode.
     function cancelConnectMode() {
       uiConnectMode = false;
       edgeStart = null;
@@ -224,6 +245,7 @@
       document.getElementById("connect-node-btn").style.display = "inline-block";
     }
 
+    /* Auto-saving (Mermaid string to localStorage) */
     function saveMermaidData() {
       let mermaidString = "graph LR\n";
       let nodeToId = new Map();
@@ -231,7 +253,6 @@
         const node = nodes[i];
         const id = "node" + i;
         nodeToId.set(node, id);
-        // Make sure to escape any double quotes in the text.
         const safeText = node.text.replace(/"/g, '\\"');
         mermaidString += `${id}["${safeText}" | ${node.x},${node.y}]\n`;
       }
@@ -244,85 +265,159 @@
       }
       localStorage.setItem("mermaidData", mermaidString);
     }
-
     function loadMermaidData() {
       const data = localStorage.getItem("mermaidData");
       if (!data) return;
-      // Clear any existing nodes and edges.
+
+      // Clear current nodes and edges.
       nodes.length = 0;
       edges.length = 0;
+      
       const lines = data.split("\n");
-      // Remove first line if it starts with "graph"
+      // Remove graph header if present.
       if (lines.length > 0 && lines[0].startsWith("graph")) {
         lines.shift();
       }
-      const idToNode = {};
-      // Regular expressions to match a node or an edge line.
-      const nodeLineRegex = /^(node\d+)\s*\[\s*"([^"]*)"\s*\|\s*(-?\d+(?:\.\d+)?),\s*(-?\d+(?:\.\d+)?)\s*\]\s*$/;
-      const edgeLineRegex = /^(node\d+)\s*-->\s*(node\d+)\s*$/;
       
-      for (const rawLine of lines) {
+      const idToNode = {};
+      // Regex for nodes with coordinates: node\d+["text" | x,y]
+      const nodeRegexWithCoords = /^(node\d+)\s*\[\s*"([^"]+)"\s*\|\s*(-?\d+(?:\.\d+)?),\s*(-?\d+(?:\.\d+)?)\s*\]\s*$/;
+      // Regex for nodes without coordinates: node\d+["text"]
+      const nodeRegexWithoutCoords = /^(node\d+)\s*\[\s*"([^"]+)"\s*\]\s*$/;
+      // Regex for edges: node\d+ --> node\d+
+      const edgeRegex = /^(node\d+)\s*-->\s*(node\d+)\s*$/;
+      
+      // Compute center of the current view in world coordinates.
+      const centerWorld = viewToWorld(canvas.width / 2, canvas.height / 2);
+
+      lines.forEach(rawLine => {
+        console.log(rawLine);
         const line = rawLine.trim();
-        if (line === "") continue;
-        let nodeMatch = line.match(nodeLineRegex);
-        if (nodeMatch) {
-          const id = nodeMatch[1];
-          const text = nodeMatch[2];
-          const x = parseFloat(nodeMatch[3]);
-          const y = parseFloat(nodeMatch[4]);
-          const node = new Node(x, y);
-          node.text = text;
-          nodes.push(node);
-          idToNode[id] = node;
-        } else {
-          const edgeMatch = line.match(edgeLineRegex);
-          if (edgeMatch) {
-            const idA = edgeMatch[1];
-            const idB = edgeMatch[2];
-            const nodeA = idToNode[idA];
-            const nodeB = idToNode[idB];
-            if (nodeA && nodeB) {
-              const dx = nodeB.x - nodeA.x;
-              const dy = nodeB.y - nodeA.y;
-              const length = Math.sqrt(dx * dx + dy * dy);
-              const edge = new Edge(nodeA, nodeB, length);
-              edges.push(edge);
-            }
+        if (line === "") return;
+        
+        let match = nodeRegexWithCoords.exec(line);
+        if (match) {
+          // Format: nodeX["text" | x,y]
+          const id = match[1];
+          const text = match[2];
+          const x = parseFloat(match[3]);
+          const y = parseFloat(match[4]);
+          const newNode = new Node(x, y);
+          newNode.text = text;
+          nodes.push(newNode);
+          idToNode[id] = newNode;
+        } else if ((match = nodeRegexWithoutCoords.exec(line))) {
+          // Format: nodeX["text"]
+          // Place the node around the current view center with a random offset.
+          const id = match[1];
+          const text = match[2];
+          const offsetX = (Math.random() - 0.5) * 300; // between -150 and 150
+          const offsetY = (Math.random() - 0.5) * 200; // between -100 and 100
+          const x = centerWorld.x + offsetX;
+          const y = centerWorld.y + offsetY;
+          const newNode = new Node(x, y);
+          newNode.text = text;
+          nodes.push(newNode);
+          idToNode[id] = newNode;
+        } else if ((match = edgeRegex.exec(line))) {
+          // Format: nodeX --> nodeY
+          const sourceId = match[1];
+          const targetId = match[2];
+          const sourceNode = idToNode[sourceId];
+          const targetNode = idToNode[targetId];
+          if (sourceNode && targetNode) {
+            const dx = targetNode.x - sourceNode.x;
+            const dy = targetNode.y - sourceNode.y;
+            const length = Math.sqrt(dx * dx + dy * dy);
+            edges.push(new Edge(sourceNode, targetNode, length));
           }
         }
-      }
+      });
     }
 
-    // On load, parse any saved simulation data.
-    loadMermaidData();
+    /* Word wrapping helpers */
+    function wrapText(ctx, text, maxWidth, fontSize) {
+      ctx.font = fontSize + "px sans-serif";
+      const words = text.split(' ');
+      const lines = [];
+      let currentLine = words[0] || "";
+      for (let i = 1; i < words.length; i++) {
+        const word = words[i];
+        const testLine = currentLine + " " + word;
+        const metrics = ctx.measureText(testLine);
+        if (metrics.width > maxWidth && currentLine !== "") {
+          lines.push(currentLine);
+          currentLine = word;
+        } else {
+          currentLine = testLine;
+        }
+      }
+      lines.push(currentLine);
+      return lines;
+    }
+    function wrapAndAdjustText(ctx, text, maxWidth, baseFontSize) {
+      let fontSize = baseFontSize;
+      let lines = wrapText(ctx, text, maxWidth, fontSize);
+      let longest = 0;
+      for (const line of lines) {
+        const lineWidth = ctx.measureText(line).width;
+        if (lineWidth > longest) longest = lineWidth;
+      }
+      if (longest > maxWidth) {
+        fontSize = fontSize * (maxWidth / longest);
+        lines = wrapText(ctx, text, maxWidth, fontSize);
+      }
+      return { lines, fontSize };
+    }
 
-    // Save periodically and before the page unloads.
-    setInterval(saveMermaidData, 2000);
-    window.addEventListener("beforeunload", saveMermaidData);
+    /* Inline editing of node text */
+    function editNodeInline(node) {
+      if (inlineEditor) return;
+      const canvasRect = canvas.getBoundingClientRect();
+      const input = document.createElement("input");
+      input.type = "text";
+      input.value = node.text;
+      input.style.position = "absolute";
+      input.style.width = "120px";
+      input.style.fontSize = "16px";
+      input.style.padding = "2px";
+      input.style.border = "1px solid #ccc";
+      input.style.zIndex = "100";
+      // Position input relative to the canvas by converting node's world position to view (screen) position.
+      input.style.left = `${canvasRect.left + (node.x * scale + panOffsetX) - 60}px`;
+      input.style.top = `${canvasRect.top + (node.y * scale + panOffsetY) - 12}px`;
+      inlineEditor = input;
+      document.body.appendChild(input);
+      input.focus();
+      input.select();
+      function finalizeEdit() {
+        node.text = input.value;
+        inlineEditor.remove();
+        inlineEditor = null;
+      }
+      input.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") finalizeEdit();
+        else if (e.key === "Escape") { inlineEditor.remove(); inlineEditor = null; }
+      });
+      input.addEventListener("blur", () => {
+        if (inlineEditor) finalizeEdit();
+      });
+    }
 
-    // -------------------------
-    // Mouse Events and Interaction
-    // -------------------------
-    // Mouse down: either start dragging an existing node, or (if shift is held) start an edge drag,
-    // or, if clicking empty space, create a new node.
+    /* Mouse events */
     canvas.addEventListener("mousedown", (e) => {
       const pos = getMousePos(e);
       mouseX = pos.x;
       mouseY = pos.y;
       
-      // If UI Connect Mode is active, check if a node was clicked.
       if (uiConnectMode) {
         const targetNode = getNodeAtPosition(pos.x, pos.y);
         if (targetNode && targetNode !== edgeStart) {
-          // Compute the edge's rest length.
           const dx = targetNode.x - edgeStart.x;
           const dy = targetNode.y - edgeStart.y;
           const length = Math.sqrt(dx * dx + dy * dy);
-          // Create the new edge.
-          const newEdge = new Edge(edgeStart, targetNode, length);
-          edges.push(newEdge);
+          edges.push(new Edge(edgeStart, targetNode, length));
         }
-        // Cancel UI connect mode.
         uiConnectMode = false;
         edgeStart = null;
         document.getElementById("cancel-connect-btn").style.display = "none";
@@ -330,59 +425,45 @@
         return;
       }
       
-      // Proceed with regular behavior.
       const node = getNodeAtPosition(pos.x, pos.y);
       if (node) {
-        // If we hit a node, select it.
         if (currentSelectedNode !== node) {
           clearSelection();
           currentSelectedNode = node;
           node.selected = true;
         }
         if (e.shiftKey) {
-          // If shift is pressed, start creating an edge from this node.
           isCreatingEdge = true;
           edgeStart = node;
         } else if (e.metaKey || e.ctrlKey) {
-          // If Cmd (or Ctrl on Windows) is pressed, reposition the node directly.
           draggedNode = node;
           node.isDragging = true;
-          node.directDragging = true; // Mark node for direct repositioning (no tugging).
-          dragOffsetX = pos.x - node.x;
-          dragOffsetY = pos.y - node.y;
+          node.directDragging = true;
+          let worldPos = viewToWorld(pos.x, pos.y);
+          dragOffsetX = worldPos.x - node.x;
+          dragOffsetY = worldPos.y - node.y;
         } else {
-          // Otherwise, start a normal drag of the node.
           draggedNode = node;
           node.isDragging = true;
-          dragOffsetX = pos.x - node.x;
-          dragOffsetY = pos.y - node.y;
+          let worldPos = viewToWorld(pos.x, pos.y);
+          dragOffsetX = worldPos.x - node.x;
+          dragOffsetY = worldPos.y - node.y;
         }
-      } else {
-        // If clicking on empty space, clear selection and create a new node.
-        clearSelection();
-        const newNode = new Node(pos.x, pos.y);
-        nodes.push(newNode);
-        currentSelectedNode = newNode;
-        newNode.selected = true;
       }
+      // If clicked on empty space, do nothing (you must use the "Add Node" button)
     });
-
-    // Mouse move: update the mouse coordinates.
-    // If a node is being dragged, update its position to follow the mouse.
     canvas.addEventListener("mousemove", (e) => {
       const pos = getMousePos(e);
       mouseX = pos.x;
       mouseY = pos.y;
       if (draggedNode && draggedNode.isDragging) {
-        draggedNode.x = pos.x - dragOffsetX;
-        draggedNode.y = pos.y - dragOffsetY;
+        const worldPos = viewToWorld(pos.x, pos.y);
+        draggedNode.x = worldPos.x - dragOffsetX;
+        draggedNode.y = worldPos.y - dragOffsetY;
       }
     });
-
-    // Mouse up: stop dragging or finish creating an edge.
     canvas.addEventListener("mouseup", (e) => {
       if (draggedNode) {
-        // If the node was repositioned directly update its connected edges.
         if (draggedNode.directDragging) {
           for (let i = 0; i < edges.length; i++) {
             const edge = edges[i];
@@ -401,97 +482,72 @@
         const pos = getMousePos(e);
         const targetNode = getNodeAtPosition(pos.x, pos.y);
         if (targetNode && targetNode !== edgeStart) {
-          // Create an edge with the current distance as its rest length.
           const dx = targetNode.x - edgeStart.x;
           const dy = targetNode.y - edgeStart.y;
           const length = Math.sqrt(dx * dx + dy * dy);
-          const newEdge = new Edge(edgeStart, targetNode, length);
-          edges.push(newEdge);
+          edges.push(new Edge(edgeStart, targetNode, length));
         }
         isCreatingEdge = false;
         edgeStart = null;
       }
     });
 
-    // Double-click: if double-clicking on a node, create an inline editor.
-    canvas.addEventListener("dblclick", (e) => {
-      const pos = getMousePos(e);
-      const node = getNodeAtPosition(pos.x, pos.y);
-      if (node) {
-        editNodeInline(node);
+    /* Override scroll (wheel) events to implement panning and zooming.
+       Hold the Ctrl key to zoom; otherwise, the wheel pans the view. */
+    canvas.addEventListener("wheel", (e) => {
+      e.preventDefault();
+      // If Ctrl is pressed, zoom; else, pan.
+      if (e.ctrlKey) {
+        const zoomSensitivity = 0.001;
+        const factor = 1 - e.deltaY * zoomSensitivity;
+        const mousePos = getMousePos(e);
+        // Get the current world coordinates under the cursor.
+        const worldPos = { 
+          x: (mousePos.x - panOffsetX) / scale, 
+          y: (mousePos.y - panOffsetY) / scale 
+        };
+        const newScale = scale * factor;
+        // Adjust panOffset so that the world point under the mouse remains stationary.
+        panOffsetX = mousePos.x - worldPos.x * newScale;
+        panOffsetY = mousePos.y - worldPos.y * newScale;
+        scale = newScale;
+        updateZoomLabel();
+      } else {
+        panOffsetX -= e.deltaX;
+        panOffsetY -= e.deltaY;
       }
-    });
+    }, { passive: false });
 
-    // Updated Keydown Event Handler to check for an active inline editor.
-    window.addEventListener("keydown", (e) => {
-      // If an inline editor is active, don't process these commands.
-      if (inlineEditor) return;
-
-      if (currentSelectedNode) {
-        if (e.key.toLowerCase() === "d") {
-          // Delete the selected node.
-          // Remove edges connected to this node.
-          for (let i = edges.length - 1; i >= 0; i--) {
-            if (edges[i].nodeA === currentSelectedNode || edges[i].nodeB === currentSelectedNode) {
-              edges.splice(i, 1);
-            }
-          }
-          // Remove the node from the nodes array.
-          const index = nodes.indexOf(currentSelectedNode);
-          if (index > -1) {
-            nodes.splice(index, 1);
-          }
-          currentSelectedNode = null;
-        } else if (e.key.toLowerCase() === "e") {
-          // Edit the selected node's text inline.
-          editNodeInline(currentSelectedNode);
-        }
-      }
-    });
-
-    // -------------------------
-    // Simulation: Verlet Integration & Constraints
-    // -------------------------
-    const damping = 0.8;             // Damping factor
-    const constraintIterations = 20; // Number of relaxation iterations per frame
-
-    // Update node positions using Verlet integration.
+    /* Physics update (using Verlet integration) */
+    const damping = 0.8;
+    const constraintIterations = 20;
     function update() {
       for (const node of nodes) {
         if (!node.isDragging) {
-          // Compute "velocity" as the difference between current and old positions.
           const vx = (node.x - node.oldx) * damping;
           const vy = (node.y - node.oldy) * damping;
-          // Save the current position for the next iteration.
           node.oldx = node.x;
           node.oldy = node.y;
-          // Update the position.
           node.x += vx;
           node.y += vy;
         } else {
-          // While dragging, keep the old position in sync.
           node.oldx = node.x;
           node.oldy = node.y;
         }
       }
-
-      // Constraint relaxation: adjust node positions so that each edge's length stays near its rest length.
       for (let i = 0; i < constraintIterations; i++) {
         for (const edge of edges) {
           const dx = edge.nodeB.x - edge.nodeA.x;
           const dy = edge.nodeB.y - edge.nodeA.y;
           const dist = Math.sqrt(dx * dx + dy * dy);
-          if (dist === 0) continue; // Avoid division by zero
-
-          // If either node is being repositioned directly, update the rest length (preserving the new connection).
+          if (dist === 0) continue;
           if (edge.nodeA.directDragging || edge.nodeB.directDragging) {
             edge.length = dist;
             continue;
           }
-
-          const difference = (dist - edge.length) / dist;
-          const offsetX = dx * 0.5 * difference;
-          const offsetY = dy * 0.5 * difference;
+          const diff = (dist - edge.length) / dist;
+          const offsetX = dx * 0.5 * diff;
+          const offsetY = dy * 0.5 * diff;
           if (!edge.nodeA.isDragging) {
             edge.nodeA.x += offsetX;
             edge.nodeA.y += offsetY;
@@ -504,48 +560,49 @@
       }
     }
 
-    // -------------------------
-    // Rendering
-    // -------------------------
+    /* Draw the scene with pan and zoom transforms */
     function draw() {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.save();
+      // Apply pan and zoom to the entire scene.
+      ctx.translate(panOffsetX, panOffsetY);
+      ctx.scale(scale, scale);
       
-      // Draw grid
+      /* Draw grid in world coordinates */
       const gridSize = 20;
       const dotSize = 2;
-      
       ctx.fillStyle = COLOR_SCHEME.GRID;
-      for (let x = gridSize; x < canvas.width; x += gridSize) {
-        for (let y = gridSize; y < canvas.height; y += gridSize) {
+      // Compute visible world bounds:
+      const worldLeftVisible   = (-panOffsetX) / scale;
+      const worldTopVisible    = (-panOffsetY) / scale;
+      const worldRightVisible  = (canvas.width - panOffsetX) / scale;
+      const worldBottomVisible = (canvas.height - panOffsetY) / scale;
+      for (let x = Math.floor(worldLeftVisible / gridSize) * gridSize; x < worldRightVisible; x += gridSize) {
+        for (let y = Math.floor(worldTopVisible / gridSize) * gridSize; y < worldBottomVisible; y += gridSize) {
           ctx.beginPath();
-          ctx.arc(x, y, dotSize/2, 0, Math.PI * 2);
+          // Use dotSize divided by scale so that the dots remain constant in screen space.
+          ctx.arc(x, y, dotSize / scale, 0, Math.PI * 2);
           ctx.fill();
         }
       }
       
-      // Draw edges with arrows
+      /* Draw edges */
       ctx.strokeStyle = COLOR_SCHEME.EDGE;
       ctx.fillStyle = COLOR_SCHEME.EDGE;
       ctx.lineWidth = 2;
       for (const edge of edges) {
-        // Compute the angle from nodeA to nodeB.
         const dx = edge.nodeB.x - edge.nodeA.x;
         const dy = edge.nodeB.y - edge.nodeA.y;
         const angle = Math.atan2(dy, dx);
-        // Adjust points so the line starts/ends at the edge of the node circles.
         const startX = edge.nodeA.x + Math.cos(angle) * edge.nodeA.radius;
         const startY = edge.nodeA.y + Math.sin(angle) * edge.nodeA.radius;
         const endX = edge.nodeB.x - Math.cos(angle) * edge.nodeB.radius;
         const endY = edge.nodeB.y - Math.sin(angle) * edge.nodeB.radius;
-        
-        // Draw the edge line.
         ctx.beginPath();
         ctx.moveTo(startX, startY);
         ctx.lineTo(endX, endY);
         ctx.stroke();
-
-        // Draw the arrow head at the destination (nodeB).
-        const headLength = 15; // Length of the arrow head.
+        const headLength = 15;
         const arrowAngle1 = angle + Math.PI / 7;
         const arrowAngle2 = angle - Math.PI / 7;
         ctx.beginPath();
@@ -556,7 +613,7 @@
         ctx.fill();
       }
       
-      // Draw nodes
+      /* Draw nodes */
       for (const node of nodes) {
         ctx.beginPath();
         ctx.arc(node.x, node.y, node.radius, 0, Math.PI * 2);
@@ -565,8 +622,6 @@
         ctx.strokeStyle = COLOR_SCHEME.NODE.BORDER;
         ctx.lineWidth = 2;
         ctx.stroke();
-        
-        // Selected node outline
         if (node.selected) {
           ctx.beginPath();
           ctx.arc(node.x, node.y, node.radius, 0, Math.PI * 2);
@@ -574,26 +629,17 @@
           ctx.lineWidth = 4;
           ctx.stroke();
         }
-        
-        // Node text drawing with word wrapping and text resizing:
         if (node.text) {
-          // Calculate maximum allowed text width relative to the node's diameter (80% here)
           const maxTextWidth = node.radius * 2 * 0.8;
-          const baseFontSize = 16; // Base font size; adjust as needed.
-          
-          // Get wrapped lines and the adjusted font size so that no line exceeds maxTextWidth.
+          const baseFontSize = 16;
           const { lines, fontSize } = wrapAndAdjustText(ctx, node.text, maxTextWidth, baseFontSize);
-          
           ctx.font = `${fontSize}px sans-serif`;
           ctx.fillStyle = COLOR_SCHEME.NODE.TEXT;
           ctx.textAlign = "center";
           ctx.textBaseline = "middle";
-          
-          // Calculate total height of the text block (with a 1.2 line-height factor)
           const lineHeight = fontSize * 1.2;
           const totalHeight = lines.length * lineHeight;
           let currentY = node.y - totalHeight / 2 + lineHeight / 2;
-          
           for (const line of lines) {
             ctx.fillText(line, node.x, currentY);
             currentY += lineHeight;
@@ -601,229 +647,72 @@
         }
       }
       
-      // Edge creation preview
+      /* Draw edge creation preview (if in connect mode) */
       if (isCreatingEdge && edgeStart) {
-        const previewDx = mouseX - edgeStart.x;
-        const previewDy = mouseY - edgeStart.y;
-        const previewAngle = Math.atan2(previewDy, previewDx);
-        // Adjust preview start from node edge.
+        const worldMouse = viewToWorld(mouseX, mouseY);
+        const previewAngle = Math.atan2(worldMouse.y - edgeStart.y, worldMouse.x - edgeStart.x);
         const previewStartX = edgeStart.x + Math.cos(previewAngle) * edgeStart.radius;
         const previewStartY = edgeStart.y + Math.sin(previewAngle) * edgeStart.radius;
-        
         ctx.beginPath();
         ctx.moveTo(previewStartX, previewStartY);
-        ctx.lineTo(mouseX, mouseY);
+        ctx.lineTo(worldMouse.x, worldMouse.y);
         ctx.strokeStyle = COLOR_SCHEME.PREVIEW;
         ctx.lineWidth = 2;
         ctx.stroke();
-        
-        // Draw the arrow head at the mouse position.
         const headLength = 15;
         const arrowAngle1 = previewAngle + Math.PI / 7;
         const arrowAngle2 = previewAngle - Math.PI / 7;
         ctx.beginPath();
-        ctx.moveTo(mouseX, mouseY);
-        ctx.lineTo(mouseX - headLength * Math.cos(arrowAngle1), mouseY - headLength * Math.sin(arrowAngle1));
-        ctx.lineTo(mouseX - headLength * Math.cos(arrowAngle2), mouseY - headLength * Math.sin(arrowAngle2));
+        ctx.moveTo(worldMouse.x, worldMouse.y);
+        ctx.lineTo(worldMouse.x - headLength * Math.cos(arrowAngle1), worldMouse.y - headLength * Math.sin(arrowAngle1));
+        ctx.lineTo(worldMouse.x - headLength * Math.cos(arrowAngle2), worldMouse.y - headLength * Math.sin(arrowAngle2));
         ctx.closePath();
         ctx.fillStyle = COLOR_SCHEME.PREVIEW;
         ctx.fill();
       }
+      
+      ctx.restore();
     }
 
-    // The animation loop: update physics, then draw, then request the next frame.
     function animate() {
       update();
       draw();
+      // Update instructions translation so they pan with the scene (instructions do not scale)
+      document.getElementById("instructions-panel").style.transform = `translate(${panOffsetX}px, ${panOffsetY}px)`;
       requestAnimationFrame(animate);
     }
     animate();
 
-    // Async function to query the OpenAI API using Chat Completions.
-    async function queryOpenAI(message) {
-      const apiKey = document.getElementById("openai-api-key").value;
-      if (!apiKey) {
-        alert("Please enter your OpenAI API Key.");
-        return;
-      }
-      
-      const url = "https://api.openai.com/v1/chat/completions";
-      const payload = {
-        model: "gpt-4o",
-        messages: [{
-          role: "user",
-          content: message
-        }],
-        max_tokens: 150,
-        temperature: 0.7
-      };
-      
-      try {
-        const response = await fetch(url, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${apiKey}`
-          },
-          body: JSON.stringify(payload)
-        });
-        
-        if (!response.ok) {
-          throw new Error(`Request failed with status ${response.status}`);
-        }
-        
-        const data = await response.json();
-        console.log("OpenAI API Response:", data);
-        return data;
-      } catch (error) {
-        console.error("Error querying OpenAI:", error);
-      }
-    }
-
-    // Example usage (you can call this function wherever needed):
-    // queryOpenAI("Hello, OpenAI!").then(data => console.log(data));
-
-    // Inline editing function: creates an input element over the node for editing.
-    function editNodeInline(node) {
-      // Prevent multiple editors from showing up.
-      if (inlineEditor) return;
-
-      // Get the canvas position to correctly offset the input.
-      const canvasRect = canvas.getBoundingClientRect();
-
-      // Create the input element.
-      const input = document.createElement("input");
-      input.type = "text";
-      input.value = node.text;
-      input.style.position = "absolute";
-      input.style.width = "120px"; // Adjust width as needed.
-      input.style.fontSize = "16px";
-      input.style.padding = "2px";
-      input.style.border = "1px solid #ccc";
-      input.style.zIndex = "100"; // Bring to front
-
-      // Position the input centered over the node.
-      // node.x and node.y are relative to the canvas.
-      input.style.left = `${canvasRect.left + node.x - 60}px`; // 60 = half of 120px width.
-      input.style.top = `${canvasRect.top + node.y - 12}px`;   // Approximate half-height.
-
-      // Track the active editor.
-      inlineEditor = input;
-      document.body.appendChild(input);
-      input.focus();
-      input.select();
-
-      // When finished editing, update the node's text and remove the editor.
-      function finalizeEdit() {
-        node.text = input.value;
-        inlineEditor.remove();
-        inlineEditor = null;
-      }
-
-      // Commit on Enter key, cancel on Escape.
-      input.addEventListener("keydown", (e) => {
-        if (e.key === "Enter") {
-          finalizeEdit();
-        } else if (e.key === "Escape") {
-          inlineEditor.remove();
-          inlineEditor = null;
-        }
-      });
-
-      // Also commit if the input loses focus.
-      input.addEventListener("blur", () => {
-        if (inlineEditor) finalizeEdit();
-      });
-    }
-
-    // Helper function for word wrapping inside a node.
-    function wrapText(ctx, text, maxWidth, fontSize) {
-      ctx.font = fontSize + "px sans-serif";
-      const words = text.split(' ');
-      const lines = [];
-      let currentLine = words[0] || "";
-
-      for (let i = 1; i < words.length; i++) {
-        const word = words[i];
-        const testLine = currentLine + " " + word;
-        const metrics = ctx.measureText(testLine);
-        if (metrics.width > maxWidth && currentLine !== "") {
-          lines.push(currentLine);
-          currentLine = word;
-        } else {
-          currentLine = testLine;
-        }
-      }
-      lines.push(currentLine);
-      return lines;
-    }
-
-    // Helper function that wraps text and adjusts font size so that the longest line fits within maxWidth.
-    function wrapAndAdjustText(ctx, text, maxWidth, baseFontSize) {
-      let fontSize = baseFontSize;
-      let lines = wrapText(ctx, text, maxWidth, fontSize);
-      let longest = 0;
-      for (const line of lines) {
-        const lineWidth = ctx.measureText(line).width;
-        if (lineWidth > longest) {
-          longest = lineWidth;
-        }
-      }
-      // If the longest line exceeds maxWidth, reduce the fontSize.
-      if (longest > maxWidth) {
-        fontSize = fontSize * (maxWidth / longest);
-        lines = wrapText(ctx, text, maxWidth, fontSize);
-      }
-      return { lines, fontSize };
-    }
-
-    // Attach UI button event listeners.
+    /* Attach UI button event listeners */
     document.getElementById("add-node-btn").addEventListener("click", addNode);
     document.getElementById("delete-node-btn").addEventListener("click", deleteNode);
     document.getElementById("edit-node-btn").addEventListener("click", editNode);
     document.getElementById("connect-node-btn").addEventListener("click", startConnectMode);
     document.getElementById("cancel-connect-btn").addEventListener("click", cancelConnectMode);
-
-    // Function to export the current graph as a Mermaid file (without location info)
-    function exportMermaidGraph() {
-      let mermaidString = "graph LR\n";
-      let nodeToId = new Map();
-
-      // Build nodes without location data.
-      for (let i = 0; i < nodes.length; i++) {
-        const node = nodes[i];
-        const id = "node" + i;
-        nodeToId.set(node, id);
-        // Escape any double quotes in the node text.
-        const safeText = node.text.replace(/"/g, '\\"');
-        mermaidString += `${id}["${safeText}"]\n`;
-      }
-      
-      // Build the edge connections.
-      for (const edge of edges) {
-        const idA = nodeToId.get(edge.nodeA);
-        const idB = nodeToId.get(edge.nodeB);
-        if (idA !== undefined && idB !== undefined) {
-          mermaidString += `${idA} --> ${idB}\n`;
-        }
-      }
-      
-      // Download the generated Mermaid string as a file.
+    document.getElementById("export-mermaid-btn").addEventListener("click", () => {
+      const mermaidString = getExportableMermaidGraph();
       downloadMermaid("graph.mmd", mermaidString);
+    });
+    document.getElementById("generate-roadmap-btn").addEventListener("click", generateRoadmap);
+    document.getElementById("clear-graph-btn").addEventListener("click", () => {
+      if (confirm("Are you sure you want to clear the graph? This will delete every node and its connections.")) {
+        nodes.length = 0;
+        edges.length = 0;
+        clearSelection();
+      }
+    });
+
+    /* Restore API Key from localStorage */
+    const apiKeyInput = document.getElementById("openai-api-key");
+    apiKeyInput.addEventListener("change", function(){
+      localStorage.setItem("openaiApiKey", apiKeyInput.value);
+    });
+    const savedApiKey = localStorage.getItem("openaiApiKey");
+    if(savedApiKey) {
+      apiKeyInput.value = savedApiKey;
     }
 
-    // Helper function to trigger file download of a text file.
-    function downloadMermaid(filename, text) {
-      const element = document.createElement("a");
-      element.setAttribute("href", "data:text/plain;charset=utf-8," + encodeURIComponent(text));
-      element.setAttribute("download", filename);
-      element.style.display = "none";
-      document.body.appendChild(element);
-      element.click();
-      document.body.removeChild(element);
-    }
-
-    // Function to get the exportable mermaid graph (without location information)
+    /* Stub functions for exporting and generating roadmaps */
     function getExportableMermaidGraph() {
       let mermaidString = "graph LR\n";
       let nodeToId = new Map();
@@ -843,91 +732,80 @@
       }
       return mermaidString;
     }
-
-    // Async function to generate new nodes based on user prompt and current graph.
-    // It queries the OpenAI API with the existing mermaid diagram and goal,
-    // then clears the current graph before merging in the returned new mermaid diagram.
+    function downloadMermaid(filename, text) {
+      const element = document.createElement("a");
+      element.setAttribute("href", "data:text/plain;charset=utf-8," + encodeURIComponent(text));
+      element.setAttribute("download", filename);
+      element.style.display = "none";
+      document.body.appendChild(element);
+      element.click();
+      document.body.removeChild(element);
+    }
     async function generateRoadmap() {
-      // Prompt user for their goal.
-      const userGoal = prompt("Enter your goal for the roadmap (e.g., 'I want to learn LLM based applications'):");
+      const userGoal = prompt("Enter your goal for the roadmap:");
       if (!userGoal) return;
-      
-      // Get the existing mermaid diagram without location info.
       const currentMermaid = getExportableMermaidGraph();
-      
-      // Construct the prompt for OpenAI.
       const promptMessage = `
 I have the following current roadmap in mermaid format:
 ${currentMermaid}
 My goal is: "${userGoal}"
 
-Generate action plans for the roadmap to achieve the goal.
-Each node should be completeable tasks that lead to the goal.
-
-For example, if the goal is "I want to build a simple LLM application", the roadmap might be:
-
-graph LR
-    node0["Learn ChatGPT API"]
-    node1["Learn prompt engineering"]
-    node2["Send a request to the ChatGPT API"]
-    node3["Simple CLI with Node.js"]
-    node4["Learn RAG"]
-    node5["Build a simple RAG application"]
-    node6["Simple web app with Next.js"]
-    node0 --> node1
-    node0 --> node2
-    node2 --> node3
-    node3 --> node4
-    node4 --> node5
-    node4 --> node6
-
-Generate around 5 nodes, more branching nodes are better.
-Return only the mermaid graph code (starting with "graph LR").
+Generate action plans for the roadmap. Return only the mermaid graph code starting with "graph LR".
       `.trim();
-      
-      // Query OpenAI API.
       const responseData = await queryOpenAI(promptMessage);
       if (!responseData || !responseData.choices || responseData.choices.length === 0) {
         alert("Failed to get response from OpenAI.");
         return;
       }
-      
-      // Extract the response text from OpenAI.
       const reply = responseData.choices[0].message.content;
       console.log("Received mermaid diagram from OpenAI:", reply);
-      
-      // Clear current graph before merging the new roadmap.
       nodes.length = 0;
       edges.length = 0;
-      
-      // Merge the new mermaid diagram into the (now cleared) graph.
       updateMermaidGraph(reply);
     }
-
-    // Function to merge a mermaid diagram (without location info) into the current graph.
-    // It parses the mermaid diagram, creates new nodes and edges, and appends them to the global arrays.
+    async function queryOpenAI(message) {
+      const apiKey = document.getElementById("openai-api-key").value;
+      if (!apiKey) {
+        alert("Please enter your OpenAI API Key.");
+        return;
+      }
+      const url = "https://api.openai.com/v1/chat/completions";
+      const payload = {
+        model: "gpt-4o",
+        messages: [{ role: "user", content: message }],
+        max_tokens: 150,
+        temperature: 0.7
+      };
+      try {
+        const response = await fetch(url, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${apiKey}`
+          },
+          body: JSON.stringify(payload)
+        });
+        if (!response.ok) throw new Error(`Request failed with status ${response.status}`);
+        const data = await response.json();
+        console.log("OpenAI API Response:", data);
+        return data;
+      } catch (error) {
+        console.error("Error querying OpenAI:", error);
+      }
+    }
     function updateMermaidGraph(mermaidText) {
-      mermaidText = mermaidText.replace(/```mermaid/g, "");
-      mermaidText = mermaidText.replace(/```/g, "");
-
-      console.log("Merging mermaid diagram:", mermaidText);
-
+      mermaidText = mermaidText.replace(/```mermaid/g, "").replace(/```/g, "");
       const lines = mermaidText.split('\n');
-      // Remove the first line if it's "graph LR"
       if (lines[0].startsWith("graph")) {
         lines.shift();
       }
-      
-      // Map to hold new node ids to Node objects.
       const newNodesMap = {};
-      
-      // Regular expressions for node and edge lines.
-      // Expected node line format: nodeX["Node Text"]
       const nodeRegex = /^(node\w+)\s*\[\s*"([^"]+)"\s*\]$/;
-      // Expected edge line format: nodeX --> nodeY
       const edgeRegex = /^(node\w+)\s*-->\s*(node\w+)\s*$/;
-      
-      // Process each line.
+
+      // Compute the center of the view in world coordinates.
+      const centerWorld = viewToWorld(canvas.width / 2, canvas.height / 2);
+
       lines.forEach(line => {
         line = line.trim();
         if (!line) return;
@@ -935,11 +813,11 @@ Return only the mermaid graph code (starting with "graph LR").
         if (match) {
           const nodeId = match[1];
           const nodeText = match[2];
-          // Create a new node, placing it at a random offset near the center.
-          const offsetX = Math.random() * 300 + 300; // random offset between -100 and 100
-          const offsetY = Math.random() * 200;
-          const newX = canvas.width / 2 + offsetX;
-          const newY = canvas.height / 2 + offsetY;
+          // Use symmetric random offsets so that nodes are scattered around the center.
+          const offsetX = (Math.random() - 0.5) * 300; // random between -150 and 150
+          const offsetY = (Math.random() - 0.5) * 200; // random between -100 and 100
+          const newX = centerWorld.x + offsetX;
+          const newY = centerWorld.y + offsetY;
           const newNode = new Node(newX, newY);
           newNode.text = nodeText;
           nodes.push(newNode);
@@ -952,45 +830,62 @@ Return only the mermaid graph code (starting with "graph LR").
             const sourceNode = newNodesMap[sourceId];
             const targetNode = newNodesMap[targetId];
             if (sourceNode && targetNode) {
-              // Compute initial rest length.
               const dx = targetNode.x - sourceNode.x;
               const dy = targetNode.y - sourceNode.y;
               const length = Math.sqrt(dx * dx + dy * dy);
-              const newEdge = new Edge(sourceNode, targetNode, length);
-              edges.push(newEdge);
+              edges.push(new Edge(sourceNode, targetNode, length));
             }
           }
         }
       });
     }
 
-    // Attach the UI button event listener for generating a new roadmap.
-    document.getElementById("generate-roadmap-btn").addEventListener("click", generateRoadmap);
+    // --- Zoom controls ---
+    function updateZoomLabel() {
+      document.getElementById("zoom-label").textContent = Math.round(scale * 100) + "%";
+    }
+    document.getElementById("zoom-in-btn").addEventListener("click", () => {
+      const zoomFactor = 1.1;
+      const center = { x: canvas.width / 2, y: canvas.height / 2 };
+      const worldPos = viewToWorld(center.x, center.y);
+      const newScale = scale * zoomFactor;
+      panOffsetX = center.x - worldPos.x * newScale;
+      panOffsetY = center.y - worldPos.y * newScale;
+      scale = newScale;
+      updateZoomLabel();
+    });
+    document.getElementById("zoom-out-btn").addEventListener("click", () => {
+      const zoomFactor = 1.1;
+      const center = { x: canvas.width / 2, y: canvas.height / 2 };
+      const worldPos = viewToWorld(center.x, center.y);
+      const newScale = scale / zoomFactor;
+      panOffsetX = center.x - worldPos.x * newScale;
+      panOffsetY = center.y - worldPos.y * newScale;
+      scale = newScale;
+      updateZoomLabel();
+    });
+    document.getElementById("zoom-reset-btn").addEventListener("click", () => {
+      scale = 1;
+      panOffsetX = 0;
+      panOffsetY = 0;
+      updateZoomLabel();
+    });
+    // --- End Zoom controls ---
 
-    // Save OpenAI API Key to local storage when the field value changes.
-    const apiKeyInput = document.getElementById("openai-api-key");
-    apiKeyInput.addEventListener("change", function() {
-      localStorage.setItem("openaiApiKey", apiKeyInput.value);
-      console.log("Saved OpenAI API Key to local storage.");
+    // Automatically load the saved mermaid data (if any) when the page loads.
+    window.addEventListener('load', () => {
+      loadMermaidData();
     });
 
-    // On page load, restore the API key from local storage.
-    const savedApiKey = localStorage.getItem("openaiApiKey");
-    if (savedApiKey) {
-      apiKeyInput.value = savedApiKey;
-      console.log("Restored OpenAI API Key from local storage.");
-    }
+    // Periodically update the mermaid data in localStorage to reflect the current nodes and edges.
+    setInterval(() => {
+      saveMermaidData();
+    }, 1000);
 
-    // Attach the Clear Graph button event listener.
-    document.getElementById("clear-graph-btn").addEventListener("click", clearGraph);
-
-    function clearGraph() {
-      if (confirm("Are you sure you want to clear the graph? This will delete every node and its connections.")) {
-        nodes.length = 0;
-        edges.length = 0;
-        clearSelection();
-      }
-    }
+    // Close instructions panel
+    document.getElementById("close-instructions-btn").addEventListener("click", () => {
+      document.getElementById("instructions-panel").style.display = "none";
+    });
   </script>
 </body>
 </html>
