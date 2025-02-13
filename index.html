@@ -28,9 +28,16 @@
       max-height: 400px;
       overflow-y: auto;
     }
+
+    #api-panel {
+      position: absolute;
+      bottom: 10px;
+      left: 10px;
+      z-index: 10;
+    }
+
     /* API settings and action overlay remain fixed */
     #api-settings, #action-overlay {
-      position: absolute;
       background: rgba(255,255,255,0.9);
       padding: 10px;
       border-radius: 5px;
@@ -42,6 +49,7 @@
       left: 10px;
     }
     #action-overlay {
+      position: fixed;
       top: 10px;
       right: 10px;
     }
@@ -86,9 +94,16 @@
   <button id="show-instructions-btn" style="position: fixed; top: 10px; left: 10px; z-index: 10; background: rgba(255, 255, 255, 0.9); border: none; border-radius: 5px; padding: 5px; font-family: sans-serif; display: none;">Show Instructions</button>
 
   <!-- API Key Settings -->
-  <div id="api-settings">
-    <label for="openai-api-key">OpenAI API Key:</label>
-    <input type="password" id="openai-api-key" placeholder="Enter API Key">
+  
+  <div id="api-panel">
+    <div id="roadmap-status" style="margin-bottom: 20px; box-shadow: 0 0 10px rgba(0, 0, 0, 0.1); z-index: 20; background: rgba(255,255,255,0.9); color: black; padding: 10px; border-radius: 5px; font-family: sans-serif; display: none;">
+      Generating the roadmap
+    </div>
+
+    <div id="api-settings">
+      <label for="openai-api-key">OpenAI API Key:</label>
+      <input type="password" id="openai-api-key" placeholder="Enter API Key">
+    </div>
   </div>
   
   <!-- UI Overlay for actions -->
@@ -149,6 +164,7 @@ My goal is: "${userGoal}"
 
 Please generate additional action items to extend my roadmap.
 Return only the JSON object with the new additions, without explaining anything.
+
 The JSON format should be:
 {
   "nodes": [
@@ -173,12 +189,45 @@ For example, if my goal is "I want to build a simple LLM application", your resp
     { "from": "node4", "to": "node5" }
   ]
 }
+
+Instead of a linear roadmap, try to generate a roadmap with a few branches.
+
+For example this roadmap:
+
+{
+  "nodes": [
+    { "id": "node1", "text": "Learn ChatGPT API" },
+    { "id": "node2", "text": "Learn prompt engineering" },
+    { "id": "node3", "text": "Build a simple CLI with Node.js" }
+  ],
+  "edges": [
+    { "from": "node1", "to": "node2" },
+    { "from": "node1", "to": "node3" }
+  ]
+}
+
+is better than this linear roadmap:
+
+{
+  "nodes": [
+    { "id": "node1", "text": "Learn ChatGPT API" },
+    { "id": "node2", "text": "Learn prompt engineering" },
+    { "id": "node3", "text": "Build a simple CLI with Node.js" }
+  ],
+  "edges": [
+    { "from": "node1", "to": "node2" },
+    { "from": "node2", "to": "node3" }
+  ]
+}
+
+Additions that have connections to the existing roadmap are better when it's possible.
 `.trim();
+
     }
 
     /* Color definitions */
     const COLOR_SCHEME = {
-      GRID: '#fff',
+      GRID: '#ccc',
       EDGE: '#64748b',
       NODE: {
         FILL: '#0ea5e9',
@@ -199,7 +248,7 @@ For example, if my goal is "I want to build a simple LLM application", your resp
         this.y = y;         // world coordinate
         this.oldx = x;
         this.oldy = y;
-        this.radius = 50;
+        this.radius = 70;
         this.isDragging = false;
         this.directDragging = false;
         this.text = "";
@@ -611,7 +660,7 @@ For example, if my goal is "I want to build a simple LLM application", your resp
       ctx.scale(scale, scale);
       
       /* Draw grid in world coordinates */
-      const gridSize = 20;
+      const gridSize = 40;
       const dotSize = 2;
       ctx.fillStyle = COLOR_SCHEME.GRID;
       // Compute visible world bounds:
@@ -784,16 +833,25 @@ For example, if my goal is "I want to build a simple LLM application", your resp
     async function generateRoadmap() {
       const userGoal = prompt("Enter your goal for the roadmap:");
       if (!userGoal) return;
+
+      // Show the "Generating the roadmap" overlay
+      const statusOverlay = document.getElementById("roadmap-status");
+      statusOverlay.style.display = "block";
+
       const currentJSON = getExportableJSONGraph();
       const promptMessage = generatePromptMessage(currentJSON, userGoal);
       const responseData = await queryOpenAI(promptMessage);
       if (!responseData || !responseData.choices || responseData.choices.length === 0) {
         alert("Failed to get response from OpenAI.");
+        statusOverlay.style.display = "none";
         return;
       }
       const reply = responseData.choices[0].message.content;
       console.log("Received JSON update from OpenAI:", reply);
       updateGraphFromJSON(reply);
+
+      // Hide the overlay after processing completes
+      statusOverlay.style.display = "none";
     }
     async function queryOpenAI(message) {
       const apiKey = document.getElementById("openai-api-key").value;
