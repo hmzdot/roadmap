@@ -31,13 +31,22 @@
   <div id="instructions">
     <p><strong>Instructions:</strong></p>
     <ul>
-      <li>Click on a node to select it (an orange outline will appear).</li>
-      <li>Drag a node to move it (pulling it will "tug" on connected nodes).</li>
-      <li>Hold <code>Shift</code> and drag from a node to another to create an edge.</li>
-      <!-- <li>Double-click a node to edit its text.</li> -->
-      <li>Press <code>e</code> to edit the selected node's text.</li>
+      <li>Click on a node to select it (an orange outline appears).</li>
+      <li>Drag a node to move it. Connected nodes will tug each other.</li>
+      <li>Hold <code>Shift</code> and drag from one node to another to create an edge.</li>
+      <li>Hold <code>Ctrl</code> (or <code>Cmd</code> on Mac) while dragging to directly reposition a node (without tugging connected nodes).</li>
+      <li>Double-click a node or press <code>e</code> to edit the selected node's text inline.</li>
       <li>Press <code>d</code> to delete the selected node (and its connected edges).</li>
-      <li>Graph is automatically saved in mermaid format to local storage.</li>
+      <li>Click the <strong>Add Node</strong> button to create a new node at the canvas center.</li>
+      <li>Click the <strong>Delete Node</strong> button to remove the selected node.</li>
+      <li>Click the <strong>Edit Node</strong> button to edit the selected node's text.</li>
+      <li>Use the <strong>Connect Node</strong> button to start connecting nodes, and the <strong>Cancel Connect</strong> button to abort.</li>
+      <li>Click the <strong>Export Mermaid</strong> button to download your graph as Mermaid code.</li>
+      <li>Click the <strong>Generate Roadmap</strong> button to create a new roadmap via the OpenAI API (API Key required).</li>
+      <li>Click the <strong>Clear Graph</strong> button to delete every node and connection (confirmation required).</li>
+      <li>Your graph is automatically saved in Mermaid format to local storage.</li>
+      <li>Node text supports dynamic word wrapping and resizing to fit within each node.</li>
+      <li>Enter your OpenAI API Key in the field at the bottom left to enable roadmap generation.</li>
     </ul>
   </div>
   
@@ -47,7 +56,7 @@
     <input type="password" id="openai-api-key" placeholder="Enter API Key">
   </div>
   
-  <!-- UI Overlay for actions: add, delete, edit, connect, export, generate roadmap -->
+  <!-- UI Overlay for actions: add, delete, edit, connect, export, generate roadmap, clear graph -->
   <div id="action-overlay" style="position: absolute; top: 10px; right: 10px; background: rgba(255,255,255,0.9); padding: 10px; border-radius: 5px; font-family: sans-serif; z-index: 10;">
     <button id="add-node-btn">Add Node</button>
     <button id="delete-node-btn">Delete Node</button>
@@ -56,6 +65,7 @@
     <button id="cancel-connect-btn" style="display:none;">Cancel Connect</button>
     <button id="export-mermaid-btn">Export Mermaid</button>
     <button id="generate-roadmap-btn">Generate Roadmap</button>
+    <button id="clear-graph-btn">Clear Graph</button>
   </div>
   
   <canvas id="canvas"></canvas>
@@ -926,7 +936,7 @@ Return only the mermaid graph code (starting with "graph LR").
           const nodeId = match[1];
           const nodeText = match[2];
           // Create a new node, placing it at a random offset near the center.
-          const offsetX = Math.random() * 200 + 300; // random offset between -100 and 100
+          const offsetX = Math.random() * 300 + 300; // random offset between -100 and 100
           const offsetY = Math.random() * 200;
           const newX = canvas.width / 2 + offsetX;
           const newY = canvas.height / 2 + offsetY;
@@ -969,6 +979,17 @@ Return only the mermaid graph code (starting with "graph LR").
     if (savedApiKey) {
       apiKeyInput.value = savedApiKey;
       console.log("Restored OpenAI API Key from local storage.");
+    }
+
+    // Attach the Clear Graph button event listener.
+    document.getElementById("clear-graph-btn").addEventListener("click", clearGraph);
+
+    function clearGraph() {
+      if (confirm("Are you sure you want to clear the graph? This will delete every node and its connections.")) {
+        nodes.length = 0;
+        edges.length = 0;
+        clearSelection();
+      }
     }
   </script>
 </body>
